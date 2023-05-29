@@ -38,6 +38,7 @@ class MangaIllust(Illust):
         total_comments (int): The illustration's total comment count.
         illust_ai_type (int): The illustration's AI type.
         illust_book_style (int): The illustration's book style.
+        comment_access_control (int): Access control level to comments
 
     Args:
         id (int): The illustration's ID.
@@ -66,6 +67,7 @@ class MangaIllust(Illust):
         total_comments (int): The illustration's total comment count.
         illust_ai_type (int): The illustration's AI type.
         illust_book_style (int): The illustration's book style.
+        comment_access_control (int): Access control level to comments
     """
 
     def __init__(
@@ -94,6 +96,7 @@ class MangaIllust(Illust):
         total_comments: int,
         illust_ai_type: int,
         illust_book_style: int,
+        comment_access_control: int,
         type: str = "manga",
         series: Optional[str] = None,
     ) -> None:
@@ -124,4 +127,5 @@ class MangaIllust(Illust):
             total_comments=total_comments,
             illust_ai_type=illust_ai_type,
             illust_book_style=illust_book_style,
+            comment_access_control=comment_access_control,
         )

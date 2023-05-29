@@ -177,7 +177,7 @@ class PixivAPI(PixivObject, AsyncContextManager["PixivAPI"]):
         localtime = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S+00:00")
         headers = {
             "x-client-time": localtime,
-            "x-client-hash": hashlib.md5(f"{localtime}{self._hash_secret}".encode("utf-8")).hexdigest(),
+            "x-client-hash": hashlib.md5(f"{localtime}{self._hash_secret}".encode()).hexdigest(),
         }
 
         data = {

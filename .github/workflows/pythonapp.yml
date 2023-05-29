@@ -29,8 +29,6 @@ jobs:
         uses: pre-commit/action@v3.0.0
       - name: Install dependencies
         run: poetry install --no-dev
-      - name: Run demo.py
-        run: poetry run python demo.py
       - name: Install dependencies tests
         run: poetry install
       - name: Run tests
