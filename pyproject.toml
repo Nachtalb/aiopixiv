@@ -37,10 +37,22 @@ ipdb = ">=0.13.13"
 
 [tool.poetry.group.test.dependencies]
 pytest = "^7.3.1"
+pytest-asyncio = "^0.21.0"
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+testpaths = "test"
+addopts = "-rsxX"
+filterwarnings = """
+error
+ignore::DeprecationWarning
+ignore:Tasks created via `Application.create_task` while the application is not running
+ignore::ResourceWarning
+"""
+asyncio_mode = "auto"
 
 [tool.isort]
 profile = "black"

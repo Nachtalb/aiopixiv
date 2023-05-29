@@ -79,7 +79,7 @@ class PixivAPI(PixivObject, AsyncContextManager["PixivAPI"]):
 
         self._initialized = False
 
-        self._authenticated_user: AuthenticatedUser
+        self._authenticated_user: Optional[AuthenticatedUser] = None
 
         headers = {
             "Referer": self._api_host,
@@ -103,7 +103,10 @@ class PixivAPI(PixivObject, AsyncContextManager["PixivAPI"]):
             return
 
         await self._session.initialize()
-        await self.authenticate()
+
+        if self.is_authenticated:
+            await self.authenticate()
+
         self._initialized = True
 
     async def shutdown(self) -> None:
@@ -138,7 +141,7 @@ class PixivAPI(PixivObject, AsyncContextManager["PixivAPI"]):
         else:
             await self.authenticate()
 
-        return self._authenticated_user
+        return self._authenticated_user  # type: ignore
 
     @property
     def is_authenticated(self) -> bool:
