@@ -1,6 +1,13 @@
-from typing import Optional
+from typing import TYPE_CHECKING, Literal, Optional, TypeAlias, Union
 
 from aiopixiv._pixivobject import PixivObject
+from aiopixiv._utils.types import JSONDict
+
+if TYPE_CHECKING:
+    from aiopixiv._api import PixivAPI
+
+IMAGE_SIZE: TypeAlias = Literal["square_medium", "medium", "large", "original"]
+EXT_IMAGE_SIZE: TypeAlias = Union[IMAGE_SIZE, Literal["best"]]
 
 
 class ImageUrls(PixivObject):
@@ -37,6 +44,10 @@ class ImageUrls(PixivObject):
         self.original = original
 
         self._id_attrs = (self.original,)
+
+    @property
+    def best(self) -> str:
+        return self.original or self.large
 
 
 class MetaSinglePageUrl(PixivObject):

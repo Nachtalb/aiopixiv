@@ -1,12 +1,15 @@
+from asyncio import as_completed
 from datetime import datetime
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, AsyncIterator, List, Optional, Sequence, Union
+
+from aiopath import AsyncPath
 
 from aiopixiv._pixivobject import PixivObject
-from aiopixiv._utils.types import JSONDict
+from aiopixiv._utils.types import FilePath, JSONDict
 from aiopixiv.models.novel import Novel
 from aiopixiv.models.page import Page
 from aiopixiv.models.tag import Tag
-from aiopixiv.models.urls import ImageUrls, MetaPagesUrls, MetaSinglePageUrl
+from aiopixiv.models.urls import EXT_IMAGE_SIZE, ImageUrls, MetaPagesUrls, MetaSinglePageUrl
 from aiopixiv.models.user import User
 
 if TYPE_CHECKING:
@@ -150,9 +153,107 @@ class Illust(PixivObject):
         data["user"] = User.de_json(data.pop("user"), client)
         data["tags"] = Tag.de_list(data.pop("tags"), client)
         data["meta_single_page"] = MetaSinglePageUrl.de_json(data.pop("meta_single_page"), client)
-        data["meta_pages"] = MetaPagesUrls.de_json(data.pop("meta_pages"), client)
+        data["meta_pages"] = MetaPagesUrls.de_list(data.pop("meta_pages"), client)
 
         return super().de_json(data=data, client=client)
+
+    @property
+    def best_image_url(self) -> str:
+        return self.meta_pages[0].image_urls.original or self.meta_pages[0].image_urls.large
+
+    @property
+    def best_image_urls(self) -> List[str]:
+        return [image.image_urls.original or image.image_urls.large for image in self.meta_pages]
+
+    async def download_first(
+        self,
+        dir_path: Optional[FilePath] = None,
+        file_name: Optional[str] = None,
+        size: EXT_IMAGE_SIZE = "best",
+        needs_authentication: bool = True,
+    ) -> AsyncPath:
+        url: str = self.image_urls[size]  # type: ignore
+
+        return await self._client.download(
+            url=url,
+            dir_path=dir_path,
+            file_name=file_name,
+            needs_authentication=needs_authentication,
+        )
+
+    async def download_all(
+        self,
+        dir_path: Optional[Union[FilePath, Sequence[Optional[FilePath]]]] = None,
+        file_name: Optional[Union[str, Sequence[Optional[str]]]] = None,
+        size: Union[EXT_IMAGE_SIZE, Sequence[EXT_IMAGE_SIZE]] = "best",
+        skip_existing: Union[bool, Sequence[bool]] = False,
+        needs_authentication: bool = True,
+    ) -> AsyncIterator[AsyncPath]:
+        total_images = len(self.meta_pages)
+
+        if not isinstance(dir_path, str) and isinstance(dir_path, Sequence):
+            if len(dir_path) != total_images:
+                raise ValueError("`dir_path` count and image count differ")
+        else:
+            dir_path = [dir_path] * total_images
+
+        if not isinstance(file_name, str) and isinstance(file_name, Sequence):
+            if len(file_name) != total_images:
+                raise ValueError("`file_name` count and image count differ")
+        else:
+            file_name = [file_name] * total_images
+
+        if not isinstance(size, str) and isinstance(size, Sequence):
+            if len(size) != total_images:
+                raise ValueError("`size` count and image count differ")
+        else:
+            size = [size] * total_images  # pyright: ignore[reportGeneralTypeIssues]
+
+        if isinstance(skip_existing, Sequence):
+            if len(skip_existing) != total_images:
+                raise ValueError("`skip_existing` count and image count differ")
+        else:
+            skip_existing = [skip_existing] * total_images
+
+        tasks = []
+        for page, i_dir_path, i_file_name, i_size, i_skip_existing in zip(
+            self.meta_pages,
+            dir_path,
+            file_name,
+            size,
+            skip_existing,
+        ):
+            tasks.append(
+                self._client.download(
+                    url=page.image_urls[i_size],  # type: ignore
+                    dir_path=i_dir_path,
+                    file_name=i_file_name,
+                    needs_authentication=needs_authentication,
+                    skip_existing=i_skip_existing,
+                )
+            )
+
+        for task in as_completed(tasks):
+            yield await task
+
+    async def download_all_immediate(
+        self,
+        dir_path: Optional[Union[FilePath, Sequence[Optional[FilePath]]]] = None,
+        file_name: Optional[Union[str, Sequence[Optional[str]]]] = None,
+        size: Union[EXT_IMAGE_SIZE, Sequence[EXT_IMAGE_SIZE]] = "best",
+        skip_existing: Union[bool, Sequence[bool]] = False,
+        needs_authentication: bool = True,
+    ) -> List[AsyncPath]:
+        paths = []
+        async for path in self.download_all(
+            dir_path=dir_path,
+            file_name=file_name,
+            size=size,
+            needs_authentication=needs_authentication,
+            skip_existing=skip_existing,
+        ):
+            paths.append(path)
+        return sorted(paths)
 
 
 class Illusts(Page):
