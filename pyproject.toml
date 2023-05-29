@@ -42,14 +42,6 @@ pytest = "^7.3.1"
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
-[tool.pytest.ini_options]
-minversion = 7.3
-adops = "-ra"
-log_cli = true
-log_cli_level = 20
-log_cli_format = "%(asctime)s [%(levelname)8s] %(message)s (%(filename)s:%(lineno)s)"
-log_cli_date_format = "%Y-%m-%d %H:%M:%S"
-
 [tool.isort]
 profile = "black"
 line_length = 120
