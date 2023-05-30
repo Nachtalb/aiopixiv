@@ -136,7 +136,7 @@ class PixivAPI(PixivObject, AsyncContextManager["PixivAPI"]):
     async def get_authenticated_user(self) -> AuthenticatedUser:
         if self._authenticated_user:
             return self._authenticated_user
-        elif self.is_authenticated:
+        elif not self.is_authenticated:
             raise NotAuthenticated()
         else:
             await self.authenticate()
@@ -206,7 +206,7 @@ class PixivAPI(PixivObject, AsyncContextManager["PixivAPI"]):
                 raise AuthenticationError("Could not authenticate with the given refresh token")
         except PixivError as exec:
             raise AuthenticationError("Could not authenticate with the given refresh token") from exec
-        except (KeyError, TypeError, ValueError) as exec:
+        except Exception as exec:
             raise AuthenticationError("Unsupported data returned from authentication endpoint") from exec
 
         self._access_token = authentication.access_token
@@ -295,7 +295,7 @@ class PixivAPI(PixivObject, AsyncContextManager["PixivAPI"]):
             parameters=[RequestParameter.from_input(key, value) for key, value in params.items()]
         )
         return await self._session.parsed_request(
-            url=f"{host or self._api_host}/{endpoint}",
+            url=f"{host or self._api_host}/{endpoint.lstrip('/')}",
             method=method,
             request_params=request_params,
             request_data=request_data,
