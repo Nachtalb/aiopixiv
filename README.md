@@ -1,5 +1,8 @@
 # AIOPixiv: Asyncio-Based Python Library for Pixiv API
 
+> ⚠ This tool is under strong development, only a subset of it's future
+> functionality has been implemented yet.
+
 **AIOPixiv** is an asyncio-based Python library for seamless integration with
 the [Pixiv API](https://pixiv.net). It draws its inspiration from the
 [python-telegram-bot](https://github.com/python-telegram-bot/python-telegram-bot)
