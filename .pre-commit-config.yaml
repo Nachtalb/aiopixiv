@@ -38,7 +38,7 @@ repos:
       - id: isort
         args: ["--sp=pyproject.toml"]
   - repo: https://github.com/charliermarsh/ruff-pre-commit
-    rev: "v0.0.270"
+    rev: v0.0.270
     hooks:
       - id: ruff
         args: ["--config=pyproject.toml"]
@@ -53,11 +53,13 @@ repos:
           - aiopath
           - pytest
   - repo: https://github.com/pre-commit/mirrors-prettier
-    rev: "v2.7.1"
+    rev: v2.7.1
     hooks:
       - id: prettier
         types_or: [markdown, toml]
         args: [--prose-wrap=always]
-        # additional_dependencies:
-        #   - "prettier@2.8.8"
-        #   - "prettier-plugin-toml@0.3.1"
+  - repo: https://github.com/python-poetry/poetry
+    rev: 1.5.1
+    hooks:
+      - id: poetry-check
+      - id: poetry-lock
