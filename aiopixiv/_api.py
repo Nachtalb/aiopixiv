@@ -7,6 +7,7 @@ from typing import AsyncContextManager, Mapping, Optional, TypeVar
 from aiopath import AsyncPath
 from yarl import URL
 
+from aiopixiv._defaults import API_HOST, AUTH_HOST, CLIENT_ID, CLIENT_SECRET, HASH_SECRET
 from aiopixiv._pixivobject import PixivObject
 from aiopixiv._utils.logging import get_logger
 from aiopixiv._utils.types import FilePath, JSONDict
@@ -56,11 +57,11 @@ class PixivAPI(PixivObject, AsyncContextManager["PixivAPI"]):
         access_token: Optional[str] = None,
         refresh_token: Optional[str] = None,
         language: Optional[str] = "en-us",
-        api_host: str = "https://app-api.pixiv.net",
-        auth_host: str = "https://oauth.secure.pixiv.net",
-        client_id: str = "MOBrBDS8blbauoSck0ZfDbtuzpyT",
-        client_secret: str = "lsACyCD94FhDUtGTXi3QzcFE2uU1hqtDaKeqrdwj",
-        hash_secret: str = "28c1fdd170a5204386cb1313c7077b34f83e4aaf4aa829ce78c231e05b0bae2c",
+        api_host: str = API_HOST,
+        auth_host: str = AUTH_HOST,
+        client_id: str = CLIENT_ID,
+        client_secret: str = CLIENT_SECRET,
+        hash_secret: str = HASH_SECRET,
     ) -> None:
         """
         Initialise the BasePixivAPI instance.

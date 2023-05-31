@@ -8,7 +8,7 @@ from typing import AsyncContextManager, AsyncIterator, ClassVar, Mapping, Option
 
 from httpx import Response
 
-from aiopixiv import __version__ as aiop_version
+from aiopixiv._defaults import USER_AGENT as DEFAULT_USER_AGENT
 from aiopixiv._utils.logging import get_logger
 from aiopixiv._utils.types import JSONDict
 from aiopixiv.error import APIError, APIErrorDetail, BadRequest, Forbidden, NetworkError, NotFound, PixivError
@@ -30,7 +30,7 @@ class BaseRequest(AsyncContextManager["BaseRequest"], abc.ABC):
     Instances of this calass can be used as asyncio context managers.
     """
 
-    USER_AGENT: ClassVar[str] = f"aiopixiv/{aiop_version} (https://github.com/Nachtalb/aiopixiv)"
+    USER_AGENT: ClassVar[str] = DEFAULT_USER_AGENT
 
     async def __aenter__(self: RT) -> RT:
         try:
