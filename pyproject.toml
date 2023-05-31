@@ -25,6 +25,7 @@ python = "^3.10"
 httpx = "^0.24.1"
 aiopath = "^0.6.11"
 yarl = "^1.9.2"
+pytest-playwright = { version = "^0.3.3", extras = ["cli"] }
 
 [tool.poetry.group.dev.dependencies]
 black = { version = ">=23.0" }
@@ -35,6 +36,9 @@ pre-commit = "^3.0"
 ipdb = ">=0.13.13"
 pytest = "^7.3"
 pytest-asyncio = "^0.21.0"
+
+[tool.poetry.scripts]
+aiopixiv = { callable = "aiopixiv._cli:cli", extras = ["cli"] }
 
 [build-system]
 requires = ["poetry-core"]
