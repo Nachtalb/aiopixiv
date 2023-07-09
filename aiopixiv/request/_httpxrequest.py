@@ -65,7 +65,7 @@ class HTTPXRequest(BaseRequest):
         request_params: Optional[RequestData] = None,
         request_data: Optional[RequestData] = None,
         headers: Optional[Mapping[str, str]] = None,
-    ) -> Tuple[int, bytes]:
+    ) -> Tuple[dict[str, str], int, bytes]:
         """
         Makes a request to the Pixiv API
 
@@ -78,7 +78,7 @@ class HTTPXRequest(BaseRequest):
                 headers. Eg. for authentication.
 
         Returns:
-            A tuple of the http response code and the data as raw bytes.
+            A tuple of the http response header, code and the data as raw bytes.
         """
 
         if self._client.is_closed:
@@ -100,7 +100,7 @@ class HTTPXRequest(BaseRequest):
         except httpx.HTTPError as err:
             raise NetworkError(f"httpx.{err.__class__.__name__}: {err}") from err
 
-        return response.status_code, response.content
+        return dict(response.headers), response.status_code, response.content
 
     @asynccontextmanager
     async def do_stream(
@@ -110,7 +110,7 @@ class HTTPXRequest(BaseRequest):
         request_params: Optional[RequestData] = None,
         request_data: Optional[RequestData] = None,
         headers: Optional[Mapping[str, str]] = None,
-    ) -> AsyncIterator[Tuple[int, AsyncIterator[bytes]]]:
+    ) -> AsyncIterator[Tuple[dict[str, str], int, AsyncIterator[bytes]]]:
         """
         Makes a stream request to the Pixiv API
 
@@ -123,7 +123,7 @@ class HTTPXRequest(BaseRequest):
                 headers. Eg. for authentication.
 
         Returns:
-            A tuple of the http response code and the content as an async iterator stream of bytes
+            A tuple of the http response header, code and the content as an async iterator stream of bytes
         """
 
         if self._client.is_closed:
@@ -142,6 +142,6 @@ class HTTPXRequest(BaseRequest):
                 files=files,
                 headers=headers,
             ) as request:
-                yield request.status_code, request.aiter_bytes()
+                yield dict(request.headers), request.status_code, request.aiter_bytes()
         except httpx.HTTPError as err:
             raise NetworkError(f"httpx.{err.__class__.__name__}: {err}") from err

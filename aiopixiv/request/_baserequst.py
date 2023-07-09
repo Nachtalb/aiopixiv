@@ -151,7 +151,7 @@ class BaseRequest(AsyncContextManager["BaseRequest"], abc.ABC):
             The content of the requested URL as raw bytes
         """
         try:
-            code, payload = await self.do_request(
+            _, code, payload = await self.do_request(
                 url=url,
                 method=method,
                 request_params=request_params,
@@ -213,7 +213,7 @@ class BaseRequest(AsyncContextManager["BaseRequest"], abc.ABC):
                 request_params=request_params,
                 request_data=request_data,
                 headers=headers,
-            ) as (code, payload):
+            ) as (_, code, payload):
                 if HTTPStatus.OK <= code <= 299:
                     yield payload
                     return
@@ -312,7 +312,7 @@ class BaseRequest(AsyncContextManager["BaseRequest"], abc.ABC):
         request_params: Optional[RequestData] = None,
         request_data: Optional[RequestData] = None,
         headers: Optional[Mapping[str, str]] = None,
-    ) -> Tuple[int, bytes]:
+    ) -> Tuple[dict[str, str], int, bytes]:
         """
         Makes a request to the Pixiv API
 
@@ -337,7 +337,7 @@ class BaseRequest(AsyncContextManager["BaseRequest"], abc.ABC):
         request_params: Optional[RequestData] = None,
         request_data: Optional[RequestData] = None,
         headers: Optional[Mapping[str, str]] = None,
-    ) -> AsyncIterator[Tuple[int, AsyncIterator[bytes]]]:
+    ) -> AsyncIterator[Tuple[dict[str, str], int, AsyncIterator[bytes]]]:
         """
         Context manager making a stream request to the Pixiv API
 
