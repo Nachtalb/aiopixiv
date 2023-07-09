@@ -1,8 +1,11 @@
 import hashlib
+from abc import abstractmethod
+from asyncio import as_completed, iscoroutinefunction
 from datetime import datetime
+from io import BytesIO
 from pathlib import Path
 from types import TracebackType
-from typing import AsyncContextManager, Mapping, Optional, TypeVar
+from typing import Any, AsyncContextManager, AsyncIterator, Mapping, Optional, Sequence, TypeVar, Union
 
 from aiopath import AsyncPath
 from yarl import URL
@@ -439,9 +442,89 @@ class PixivAPI(PixivObject, AsyncContextManager["PixivAPI"]):
             api_kwargs=api_kwargs,
         )
 
+    class AsyncBinaryIO:
+        @abstractmethod
+        async def write(self, s: bytes | bytearray) -> int:
+            pass
+
     async def download(
         self,
-        url: str,
+        url: Union[URL, str],
+        file: Any | None = None,
+        needs_authentication: bool = True,
+    ) -> Any:
+        """
+        Download a file from pixiv in memory_download
+
+        Args:
+            url (Union[URL, str]): The files URL
+            file (Any, optional): A filelike object with .write(b"") to write bytes,
+                also supports async write()
+            needs_authentication (bool, optional): If true checks and sets authentication
+                headers (defaults to True)
+
+        Returns:
+            If file was given return file otherwise return a BytesIO
+        """
+        file = file or BytesIO()
+
+        headers = {}
+        if needs_authentication:
+            headers = self._authentication_headers()
+
+        is_async = iscoroutinefunction(file.write)  # pyright: ignore
+
+        async with self._session.retrieve(
+            url=str(url),
+            headers=headers,
+        ) as content:
+            async for data in content:
+                if is_async:
+                    await file.write(data)  # type: ignore
+                else:
+                    file.write(data)  # pyright: ignore
+
+        return file
+
+    async def download_many(
+        self,
+        urls: Sequence[Union[URL, str]],
+        files: Optional[Sequence[Any]] = None,
+        needs_authentication: bool = True,
+    ) -> AsyncIterator[Any]:
+        """
+        Download multiple files at once
+
+        Args:
+            urls (Sequence[Union[URL, str]]): All the URLs to download
+            files (Sequence[Any], optional): A sequence of all objects to .write(bytes) to. May also
+                be async .write(bytes). If not given a list of BytesIO will be used.
+            needs_authentication (bool, optional): If true checks and sets authentication
+                headers (defaults to True).
+
+        Returns:
+            A list of either what was given as `files` or a list of BytesIO.
+        """
+        if files is not None and len(files) != len(urls):
+            raise ValueError("`files` count and image count differ")
+        else:
+            files = [BytesIO() for _ in range(len(urls))]
+
+        tasks = []
+        for url, i_file in zip(urls, files):
+            tasks.append(
+                self.download(
+                    url=url,
+                    file=i_file,
+                    needs_authentication=needs_authentication,
+                )
+            )
+        for task in as_completed(tasks):
+            yield await task
+
+    async def download_to_file(
+        self,
+        url: Union[URL, str],
         dir_path: Optional[FilePath] = None,
         file_name: Optional[str] = None,
         skip_existing: bool = False,
@@ -451,12 +534,12 @@ class PixivAPI(PixivObject, AsyncContextManager["PixivAPI"]):
         Download a file from pixiv
 
         Args:
-            url (str): The files URL
+            url (Union[URL, str]): The files URL
             dir_path (FilePath, optional): Path to directory to save file in (defaults to working dir)
             file_name (str, optional): Filename of the file (defaults to the filename in the URL)
             skip_existing (bool, optional): Skip already downloaded image (defaults to False)
             needs_authentication (bool, optional): If true checks and sets authentication
-                headers (defaults to False)
+                headers (defaults to True)
 
         Returns:
             The final AsyncPath of the saved file.
@@ -471,19 +554,70 @@ class PixivAPI(PixivObject, AsyncContextManager["PixivAPI"]):
         if skip_existing and await file_path.is_file():
             return file_path
 
-        headers = {}
-        if needs_authentication:
-            headers = self._authentication_headers()
-
-        async with self._session.retrieve(
-            url=url,
-            headers=headers,
-        ) as content:
-            async with file_path.open("wb") as file:
-                async for data in content:
-                    await file.write(data)
+        async with file_path.open("wb") as file:
+            await self.download(url=url, file=file, needs_authentication=needs_authentication)
 
         return file_path
+
+    async def download_many_to_file(
+        self,
+        urls: Sequence[Union[URL, str]],
+        dir_paths: Optional[Union[FilePath, Sequence[Optional[FilePath]]]] = None,
+        file_names: Optional[Union[str, Sequence[Optional[str]]]] = None,
+        skip_existing: Union[bool, Sequence[bool]] = True,
+        needs_authentication: bool = True,
+    ) -> AsyncIterator[AsyncPath]:
+        """
+        Download many urls in to files
+
+        Args:
+            urls (Sequence[Union[URL, str]]): The files URLs
+            dir_path (Union[FilePath, Sequence[FilePath]], optional): One dir or a list of dirs, if not given
+                working directory is used.
+            file_names (Union[str, Sequence[str]], optional): A filename or a list of filenames for each file,
+                if not given automatically determine the filename.
+            skip_existing (Union[bool, Sequence[bool]], optional): Wither if any existing file should be skipped,
+                when downloading or defined per file. Defaults to skipping all if they already exist.
+            needs_authentication (bool, optional): If true checks and sets authentication
+                headers (defaults to True)
+
+        Returns:
+            Returns an async iterator of AsyncPaths
+        """
+        total_urls = len(urls)
+
+        if not isinstance(dir_paths, str) and isinstance(dir_paths, Sequence):
+            if len(dir_paths) != total_urls:
+                raise ValueError("`dir_path` count and image count differ")
+        else:
+            dir_paths = [dir_paths] * total_urls
+
+        if not isinstance(file_names, str) and isinstance(file_names, Sequence):
+            if len(file_names) != total_urls:
+                raise ValueError("`file_name` count and image count differ")
+        else:
+            file_names = [file_names] * total_urls
+
+        if isinstance(skip_existing, Sequence):
+            if len(skip_existing) != total_urls:
+                raise ValueError("`skip_existing` count and image count differ")
+        else:
+            skip_existing = [skip_existing] * total_urls
+
+        tasks = []
+        for url, dir_path, file_name, skip in zip(urls, dir_paths, file_names, skip_existing):
+            tasks.append(
+                self.download_to_file(
+                    url=url,
+                    dir_path=dir_path,
+                    file_name=file_name,
+                    skip_existing=skip,
+                    needs_authentication=needs_authentication,
+                )
+            )
+
+        for task in as_completed(tasks):
+            yield await task
 
     async def illust(
         self,

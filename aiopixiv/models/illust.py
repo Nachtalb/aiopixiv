@@ -1,6 +1,5 @@
-from asyncio import as_completed
 from datetime import datetime
-from typing import TYPE_CHECKING, AsyncIterator, List, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Any, AsyncIterator, List, Optional, Sequence, Union
 
 from aiopath import AsyncPath
 
@@ -167,93 +166,81 @@ class Illust(PixivObject):
 
     async def download_first(
         self,
-        dir_path: Optional[FilePath] = None,
-        file_name: Optional[str] = None,
+        file: Any | None = None,
         size: EXT_IMAGE_SIZE = "best",
         needs_authentication: bool = True,
-    ) -> AsyncPath:
+    ) -> Any:
         url: str = self.image_urls[size]  # type: ignore
 
         return await self._client.download(
             url=url,
-            dir_path=dir_path,
-            file_name=file_name,
+            file=file,
             needs_authentication=needs_authentication,
         )
 
     async def download_all(
         self,
-        dir_path: Optional[Union[FilePath, Sequence[Optional[FilePath]]]] = None,
-        file_name: Optional[Union[str, Sequence[Optional[str]]]] = None,
+        files: Sequence[Any] | None = None,
+        size: Union[EXT_IMAGE_SIZE, Sequence[EXT_IMAGE_SIZE]] = "best",
+        needs_authentication: bool = True,
+    ) -> AsyncIterator[Any]:
+        total_images = len(self.meta_pages)
+
+        if not isinstance(size, str) and isinstance(size, Sequence):
+            if len(size) != total_images:
+                raise ValueError("`size` count and image count differ")
+
+        urls = [page.image_urls[i_size] for page, i_size in zip(self.meta_pages, size)]
+
+        async for task in self._client.download_many(
+            urls=urls,  # type: ignore[arg-type]
+            files=files,
+            needs_authentication=needs_authentication,
+        ):
+            yield task
+
+    async def download_first_to_file(
+        self,
+        dir_path: Optional[FilePath] = None,
+        file_name: Optional[str] = None,
+        size: EXT_IMAGE_SIZE = "best",
+        skip_existing: bool = True,
+        needs_authentication: bool = True,
+    ) -> AsyncPath:
+        url: str = self.image_urls[size]  # type: ignore
+
+        return await self._client.download_to_file(
+            url=url,
+            dir_path=dir_path,
+            file_name=file_name,
+            skip_existing=skip_existing,
+            needs_authentication=needs_authentication,
+        )
+
+    async def download_all_to_files(
+        self,
+        dir_paths: Optional[Union[FilePath, Sequence[Optional[FilePath]]]] = None,
+        file_names: Optional[Union[str, Sequence[Optional[str]]]] = None,
         size: Union[EXT_IMAGE_SIZE, Sequence[EXT_IMAGE_SIZE]] = "best",
         skip_existing: Union[bool, Sequence[bool]] = False,
         needs_authentication: bool = True,
     ) -> AsyncIterator[AsyncPath]:
         total_images = len(self.meta_pages)
 
-        if not isinstance(dir_path, str) and isinstance(dir_path, Sequence):
-            if len(dir_path) != total_images:
-                raise ValueError("`dir_path` count and image count differ")
-        else:
-            dir_path = [dir_path] * total_images
-
-        if not isinstance(file_name, str) and isinstance(file_name, Sequence):
-            if len(file_name) != total_images:
-                raise ValueError("`file_name` count and image count differ")
-        else:
-            file_name = [file_name] * total_images
-
         if not isinstance(size, str) and isinstance(size, Sequence):
             if len(size) != total_images:
                 raise ValueError("`size` count and image count differ")
-        else:
-            size = [size] * total_images  # pyright: ignore[reportGeneralTypeIssues]
 
-        if isinstance(skip_existing, Sequence):
-            if len(skip_existing) != total_images:
-                raise ValueError("`skip_existing` count and image count differ")
-        else:
-            skip_existing = [skip_existing] * total_images
+        urls = [page.image_urls[i_size] for page, i_size in zip(self.meta_pages, size)]
 
-        tasks = []
-        for page, i_dir_path, i_file_name, i_size, i_skip_existing in zip(
-            self.meta_pages,
-            dir_path,
-            file_name,
-            size,
-            skip_existing,
-        ):
-            tasks.append(
-                self._client.download(
-                    url=page.image_urls[i_size],  # type: ignore
-                    dir_path=i_dir_path,
-                    file_name=i_file_name,
-                    needs_authentication=needs_authentication,
-                    skip_existing=i_skip_existing,
-                )
-            )
-
-        for task in as_completed(tasks):
-            yield await task
-
-    async def download_all_immediate(
-        self,
-        dir_path: Optional[Union[FilePath, Sequence[Optional[FilePath]]]] = None,
-        file_name: Optional[Union[str, Sequence[Optional[str]]]] = None,
-        size: Union[EXT_IMAGE_SIZE, Sequence[EXT_IMAGE_SIZE]] = "best",
-        skip_existing: Union[bool, Sequence[bool]] = False,
-        needs_authentication: bool = True,
-    ) -> List[AsyncPath]:
-        paths = []
-        async for path in self.download_all(
-            dir_path=dir_path,
-            file_name=file_name,
-            size=size,
-            needs_authentication=needs_authentication,
+        async for task in self._client.download_many_to_file(
+            urls=urls,  # type: ignore[arg-type]
+            dir_paths=dir_paths,
+            file_names=file_names,
             skip_existing=skip_existing,
+            needs_authentication=needs_authentication,
         ):
-            paths.append(path)
-        return sorted(paths)
+            yield task
 
 
 class Illusts(Page):
