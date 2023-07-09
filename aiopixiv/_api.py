@@ -507,7 +507,7 @@ class PixivAPI(PixivObject, AsyncContextManager["PixivAPI"]):
         """
         if files is not None and len(files) != len(urls):
             raise ValueError("`files` count and image count differ")
-        else:
+        elif files is None:
             files = [BytesIO() for _ in range(len(urls))]
 
         tasks = []
