@@ -1,7 +1,9 @@
 from collections import defaultdict
 from contextlib import asynccontextmanager
-from tempfile import NamedTemporaryFile, TemporaryDirectory
-from typing import Any, AsyncIterator, Dict, Mapping, Optional
+from io import BytesIO, FileIO
+from itertools import cycle
+from tempfile import NamedTemporaryFile, TemporaryDirectory, TemporaryFile
+from typing import Any, AsyncIterator, Dict, Mapping, Optional, Sequence
 
 import pytest
 from aiopath import AsyncPath
@@ -317,12 +319,19 @@ class TestPixivApiWithoutRequest:
         self,
         pixiv_api: PixivAPI,
         monkeypatch: pytest.MonkeyPatch,
-        file_content: bytes = b"test",
+        file_content: bytes | Sequence[bytes] = b"test",
     ) -> None:
+        file_content_cycle = None
+        if not isinstance(file_content, bytes):
+            file_content_cycle = cycle(file_content)
+
         @asynccontextmanager
         async def retrieve(*_: Any, **__: Any) -> AsyncIterator[AsyncIterator[bytes]]:
             async def read() -> AsyncIterator[bytes]:
-                yield file_content
+                if file_content_cycle:
+                    yield next(file_content_cycle)
+                else:
+                    yield file_content  # type: ignore[misc]
 
             yield read()
 
@@ -336,12 +345,165 @@ class TestPixivApiWithoutRequest:
             sub_dir = AsyncPath(dir) / "sub_dir"
             assert await sub_dir.is_dir() is False
 
-            await pixiv_api.download(JOHN_WICK, sub_dir)
+            await pixiv_api.download_to_file(JOHN_WICK, sub_dir)
             downloaded_file = AsyncPath(sub_dir) / URL(JOHN_WICK).name
 
             assert await sub_dir.is_dir() is True
             assert await glob_dir(sub_dir) == [downloaded_file]
             assert await downloaded_file.read_bytes() == content
+
+    async def test_download_bytesio(self, pixiv_api: PixivAPI, monkeypatch: pytest.MonkeyPatch) -> None:
+        content = b"test content"
+        await self._patch_retrieve(pixiv_api, monkeypatch, content)
+
+        result_1: BytesIO = await pixiv_api.download(url=JOHN_WICK)
+        assert result_1.getvalue() == content
+
+        pre_existing_bytesio = BytesIO()
+        result_2: BytesIO = await pixiv_api.download(url=JOHN_WICK, file=pre_existing_bytesio)
+
+        assert result_2.getvalue() == content
+        assert pre_existing_bytesio.getvalue() == content
+        assert id(result_2) == id(pre_existing_bytesio)
+
+    async def test_download_with_open_file(self, pixiv_api: PixivAPI, monkeypatch: pytest.MonkeyPatch) -> None:
+        content = b"test content"
+        await self._patch_retrieve(pixiv_api, monkeypatch, content)
+
+        with TemporaryFile(mode="b+w") as file:
+            resulting_file: FileIO = await pixiv_api.download(url=JOHN_WICK, file=file)
+
+            resulting_file.seek(0)
+            assert resulting_file.read() == content
+            file.seek(0)
+            assert file.read() == content
+            assert id(resulting_file) == id(file)
+
+    async def test_download_many(self, pixiv_api: PixivAPI, monkeypatch: pytest.MonkeyPatch) -> None:
+        contents = [b"aaaaaaaaaaaaaa", b"bbbbbbbbbbbbbb"]
+        await self._patch_retrieve(pixiv_api=pixiv_api, monkeypatch=monkeypatch, file_content=contents)
+
+        received_contents_1: list[bytes] = []
+        async for item in pixiv_api.download_many(urls=[JOHN_WICK, JOHN_WICK]):
+            received_contents_1.append(item.getvalue())
+
+        assert sorted(received_contents_1) == contents
+
+        received_contents_2: list[BytesIO] = []
+        containers = [BytesIO(), BytesIO()]
+        async for item in pixiv_api.download_many(urls=[JOHN_WICK, JOHN_WICK_16x], files=containers):
+            received_contents_2.append(item)
+
+        received_contents_2.sort(key=lambda f: f.getvalue())
+
+        # We can't make sure to get the correct order as download_many uses "as_completed" so the cycled `contents`
+        # could be in any order
+        assert containers[0].getvalue() in contents
+        assert containers[1].getvalue() in contents
+        assert containers[0].getvalue() != containers[1].getvalue()
+        assert id(received_contents_2[0]) == id(containers[0])
+        assert id(received_contents_2[1]) == id(containers[1])
+
+    async def test_download_many_to_files_single_dir_no_filenames(
+        self, pixiv_api: PixivAPI, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        contents = [b"aaaaaaaaaaaaaa", b"bbbbbbbbbbbbbb"]
+        await self._patch_retrieve(pixiv_api=pixiv_api, monkeypatch=monkeypatch, file_content=contents)
+
+        with TemporaryDirectory() as dir:
+            temp_dir = AsyncPath(dir)
+            urls = [JOHN_WICK, JOHN_WICK_16x]
+            correct_paths = [temp_dir / URL(url).name for url in urls]
+
+            received_paths = []
+            async for item in pixiv_api.download_many_to_file(urls=urls, dir_paths=dir):
+                received_paths.append(item)
+
+            assert sorted(received_paths) == correct_paths
+            assert all([await path.is_file() for path in received_paths])
+            assert sorted([await path.read_bytes() for path in received_paths]) == contents
+
+    async def test_download_many_to_files_single_dir_multi_filename(
+        self, pixiv_api: PixivAPI, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        contents = [b"aaaaaaaaaaaaaa", b"bbbbbbbbbbbbbb"]
+        await self._patch_retrieve(pixiv_api=pixiv_api, monkeypatch=monkeypatch, file_content=contents)
+
+        with TemporaryDirectory() as dir:
+            temp_dir = AsyncPath(dir)
+            urls = [JOHN_WICK, JOHN_WICK_16x]
+            filenames = ["aaaaa.jpeg", "bbbbb.jpeg"]
+            correct_paths = [temp_dir / filename for filename in filenames]
+
+            received_paths = []
+            async for item in pixiv_api.download_many_to_file(urls=urls, dir_paths=dir, file_names=filenames):
+                received_paths.append(item)
+
+            assert sorted(received_paths) == correct_paths
+            assert all([await path.is_file() for path in received_paths])
+            assert sorted([await path.read_bytes() for path in received_paths]) == contents
+
+    async def test_download_many_to_files_multi_dir_multi_filenames(
+        self, pixiv_api: PixivAPI, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        contents = [b"aaaaaaaaaaaaaa", b"bbbbbbbbbbbbbb"]
+        await self._patch_retrieve(pixiv_api=pixiv_api, monkeypatch=monkeypatch, file_content=contents)
+
+        with TemporaryDirectory() as dir:
+            temp_dir = AsyncPath(dir)
+            urls = [JOHN_WICK, JOHN_WICK_16x]
+            sub_dirs = [temp_dir / "aaaa", temp_dir / "bbbb"]
+            filenames = ["aaaaa.jpeg", "bbbbb.jpeg"]
+            correct_paths = [sub_dir / filename for sub_dir, filename in zip(sub_dirs, filenames)]
+
+            received_paths = []
+            async for item in pixiv_api.download_many_to_file(urls=urls, dir_paths=sub_dirs, file_names=filenames):
+                received_paths.append(item)
+
+            assert sorted(received_paths) == correct_paths
+            assert all([await path.is_file() for path in received_paths])
+            assert sorted([await path.read_bytes() for path in received_paths]) == contents
+
+    async def test_download_many_to_files_multi_dir_no_filesnames(
+        self, pixiv_api: PixivAPI, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        contents = [b"aaaaaaaaaaaaaa", b"bbbbbbbbbbbbbb"]
+        await self._patch_retrieve(pixiv_api=pixiv_api, monkeypatch=monkeypatch, file_content=contents)
+
+        with TemporaryDirectory() as dir:
+            temp_dir = AsyncPath(dir)
+            urls = [JOHN_WICK, JOHN_WICK_16x]
+            sub_dirs = [temp_dir / "aaaa", temp_dir / "bbbb"]
+            correct_paths = [sub_dir / URL(url).name for sub_dir, url in zip(sub_dirs, urls)]
+
+            received_paths = []
+            async for item in pixiv_api.download_many_to_file(urls=urls, dir_paths=sub_dirs):
+                received_paths.append(item)
+
+            assert sorted(received_paths) == correct_paths
+            assert all([await path.is_file() for path in received_paths])
+            assert sorted([await path.read_bytes() for path in received_paths]) == contents
+
+    async def test_download_many_to_files_multi_dir_single_filesnames(
+        self, pixiv_api: PixivAPI, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        contents = [b"aaaaaaaaaaaaaa", b"bbbbbbbbbbbbbb"]
+        await self._patch_retrieve(pixiv_api=pixiv_api, monkeypatch=monkeypatch, file_content=contents)
+
+        with TemporaryDirectory() as dir:
+            temp_dir = AsyncPath(dir)
+            urls = [JOHN_WICK, JOHN_WICK_16x]
+            sub_dirs = [temp_dir / "aaaa", temp_dir / "bbbb"]
+            filename = "a_file.jpeg"
+            correct_paths = [sub_dir / filename for sub_dir in sub_dirs]
+
+            received_paths = []
+            async for item in pixiv_api.download_many_to_file(urls=urls, dir_paths=sub_dirs, file_names=filename):
+                received_paths.append(item)
+
+            assert sorted(received_paths) == correct_paths
+            assert all([await path.is_file() for path in received_paths])
+            assert sorted([await path.read_bytes() for path in received_paths]) == contents
 
     async def test_download_file_with_dir_and_filename(
         self, pixiv_api: PixivAPI, monkeypatch: pytest.MonkeyPatch
@@ -353,7 +515,7 @@ class TestPixivApiWithoutRequest:
             file = AsyncPath(file.name)
             assert await file.read_bytes() == b""
 
-            await pixiv_api.download(JOHN_WICK, file.parent, file.name)
+            await pixiv_api.download_to_file(JOHN_WICK, file.parent, file.name)
 
             assert await file.is_file() is True
             assert await file.read_bytes() == content
@@ -366,7 +528,7 @@ class TestPixivApiWithoutRequest:
             file = AsyncPath(file.name)
             assert await file.read_bytes() == b""
 
-            await pixiv_api.download(JOHN_WICK, file.parent, file.name, skip_existing=True)
+            await pixiv_api.download_to_file(JOHN_WICK, file.parent, file.name, skip_existing=True)
 
             assert await file.is_file() is True
             assert await file.read_bytes() == b"", "File should not have been overwritten"
@@ -380,7 +542,7 @@ class TestPixivApiWithRequest:
             file = AsyncPath(file.name)
             assert await file.read_bytes() == b""
 
-            await pixiv_api.download(JOHN_WICK_16x, file.parent, file.name)
+            await pixiv_api.download_to_file(JOHN_WICK_16x, file.parent, file.name)
 
             assert await file.is_file() is True
             assert await file.read_bytes() == await read_asset(url_asset_map[JOHN_WICK_16x])
