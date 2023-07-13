@@ -27,8 +27,8 @@ aiopath = "^0.6.11"
 yarl = "^1.9.2"
 
 [tool.poetry.group.dev.dependencies]
-black = { version = ">=23.0" }
-ruff = ">=0.0.263"
+black = ">=23.0"
+ruff = ">=0.0.278"
 isort = ">=5.11.5"
 mypy = ">=1.0"
 pre-commit = "^3.0"

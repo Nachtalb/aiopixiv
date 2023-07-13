@@ -9,7 +9,6 @@ if TYPE_CHECKING:
 
 
 class ProfileImageUrls(PixivObject):
-
     """
     A model representing the profile image URLs of a Pixiv user.
 

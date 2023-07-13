@@ -8,7 +8,6 @@ if TYPE_CHECKING:
 
 
 class AuthenticatedUserImageUrls(PixivObject):
-
     """
     A model representing the user image URLs of the authenticated user.
 
