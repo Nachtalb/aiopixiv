@@ -394,15 +394,12 @@ class TestPixivApiWithoutRequest:
         async for item in pixiv_api.download_many(urls=[JOHN_WICK, JOHN_WICK_16x], files=containers):
             received_contents_2.append(item)
 
-        received_contents_2.sort(key=lambda f: f.getvalue())
-
         # We can't make sure to get the correct order as download_many uses "as_completed" so the cycled `contents`
         # could be in any order
         assert containers[0].getvalue() in contents
         assert containers[1].getvalue() in contents
         assert containers[0].getvalue() != containers[1].getvalue()
-        assert id(received_contents_2[0]) == id(containers[0])
-        assert id(received_contents_2[1]) == id(containers[1])
+        assert set(map(id, received_contents_2)) == set(map(id, containers))
 
     async def test_download_many_to_files_single_dir_no_filenames(
         self, pixiv_api: PixivAPI, monkeypatch: pytest.MonkeyPatch
