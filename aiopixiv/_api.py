@@ -18,7 +18,7 @@ from aiopixiv.error import AuthenticationError, NotAuthenticated, PixivError
 from aiopixiv.models.authentication import AuthenticatedUser, Authentication
 from aiopixiv.models.illust import Illust
 from aiopixiv.models.manga import MangaIllust
-from aiopixiv.models.ugoira import UgoiraIllust
+from aiopixiv.models.ugoira import UgoiraIllust, UgoiraMetadata
 from aiopixiv.request import HTTPXRequest, RequestData
 from aiopixiv.request._requestparameters import RequestParameter
 
@@ -649,3 +649,23 @@ class PixivAPI(PixivObject, AsyncContextManager["PixivAPI"]):
                 return MangaIllust.de_json(result["illust"], self)  # type: ignore[return-value]
             case _:
                 return Illust.de_json(result["illust"], self)  # type: ignore[return-value]
+
+    async def ugoira_metadata(
+        self,
+        id: int,
+        *,
+        needs_authentication: bool = True,
+        api_kwargs: Optional[JSONDict] = None,
+    ) -> UgoiraMetadata:
+        params: JSONDict = {
+            "illust_id": id,
+        }
+
+        result = await self._get(
+            endpoint="v1/ugoira/metadata",
+            params=params,
+            needs_authentication=needs_authentication,
+            api_kwargs=api_kwargs,
+        )
+
+        return UgoiraMetadata.de_json(result["ugoira_metadata"], self)  # type: ignore[return-value]
