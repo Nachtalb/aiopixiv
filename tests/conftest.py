@@ -12,6 +12,7 @@ async def pixiv_api(auth_user: AuthenticatedUser) -> PixivAPI:
         refresh_token="bbbbbbb",
     )
     api._authenticated_user = auth_user
+    api._initialized = True
     return api
 
 

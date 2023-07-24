@@ -4,6 +4,7 @@ from io import BytesIO, FileIO
 from itertools import cycle
 from tempfile import NamedTemporaryFile, TemporaryDirectory, TemporaryFile
 from typing import Any, AsyncIterator, Dict, Mapping, Optional, Sequence
+from unittest.mock import Mock, patch
 
 import pytest
 from aiopath import AsyncPath
@@ -202,6 +203,34 @@ class TestPixivApiWithoutRequest:
             # Same as above but it shall use the refresh token set during init(), in case it's not given directly
             pixiv_api._refresh_token = "aaaaa"
             await pixiv_api.authenticate()
+
+    @patch("aiopixiv._api.PixivAPI.initialize")
+    @patch("aiopixiv._api.PixivAPI._do_request")
+    async def test_self_initialize_if_needed(
+        self,
+        _: Mock,
+        mocked_initialize: Mock,
+    ) -> None:
+        pixiv_api = PixivAPI(access_token="foo", refresh_token="bar")
+
+        def mock_initialize() -> None:
+            pixiv_api._initialized = True
+
+        mocked_initialize.side_effect = mock_initialize
+
+        # `.initialize()` should not have been called yet.
+        mocked_initialize.assert_not_called()
+
+        with pytest.raises(TypeError):
+            # Will raise an error, as _do_request is mocked, but should have called `.initialize()` now
+            await pixiv_api.illust(id=0)
+        mocked_initialize.assert_called_once()
+
+        with pytest.raises(TypeError):
+            # Will still raise an error, as _do_request is mocked. It shouldn't have called `.initialize()` again so we
+            # still expect it to have been called once only.
+            await pixiv_api.illust(id=0)
+        mocked_initialize.assert_called_once()
 
     async def test_authenticate_exception_on_bad_request_result(
         self, pixiv_api: PixivAPI, monkeypatch: pytest.MonkeyPatch

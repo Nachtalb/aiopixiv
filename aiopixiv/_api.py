@@ -160,7 +160,7 @@ class PixivAPI(PixivObject, AsyncContextManager["PixivAPI"]):
         Returns:
             True if authenticated, else False
         """
-        return bool(self._access_token and self._refresh_token)
+        return bool(self._refresh_token)
 
     def _authentication_headers(self) -> dict[str, str]:
         """
@@ -244,6 +244,9 @@ class PixivAPI(PixivObject, AsyncContextManager["PixivAPI"]):
         Returns:
             JSON parsed to a dict or a list of dicts
         """
+        if not self._initialized:
+            await self.initialize()
+
         headers = {}
         if needs_authentication:
             headers = self._authentication_headers()
