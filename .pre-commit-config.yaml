@@ -38,7 +38,7 @@ repos:
       - id: isort
         args: ["--sp=pyproject.toml"]
   - repo: https://github.com/charliermarsh/ruff-pre-commit
-    rev: v0.0.278
+    rev: v0.0.280
     hooks:
       - id: ruff
         args: ["--config=pyproject.toml"]
@@ -59,7 +59,7 @@ repos:
         types_or: [markdown, toml]
         args: [--prose-wrap=always]
   - repo: https://github.com/python-poetry/poetry
-    rev: 1.5.1
+    rev: 1.5.0
     hooks:
       - id: poetry-check
       - id: poetry-lock
