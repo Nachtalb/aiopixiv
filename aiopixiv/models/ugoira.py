@@ -1,5 +1,10 @@
+from asyncio import iscoroutinefunction
 from datetime import datetime
-from typing import TYPE_CHECKING, List, Optional
+from io import BytesIO
+from typing import TYPE_CHECKING, Any, List, Optional
+from zipfile import ZipFile
+
+from PIL import Image
 
 from aiopixiv._pixivobject import PixivObject
 from aiopixiv._utils.types import JSONDict
@@ -139,6 +144,8 @@ class UgoiraIllust(Illust):
             comment_access_control=comment_access_control,
         )
 
+        self._ugoira_metadata: "UgoiraMetadata" | None = None
+
     @classmethod
     def de_json(cls, data: Optional[JSONDict], client: "PixivAPI") -> Optional["UgoiraIllust"]:
         """See `PixivObject.de_json`."""
@@ -154,6 +161,47 @@ class UgoiraIllust(Illust):
         data["meta_pages"] = MetaPagesUrls.de_list(data.pop("meta_pages"), client)
 
         return super(Illust, cls).de_json(data=data, client=client)
+
+    async def get_metadata(self) -> "UgoiraMetadata":
+        if not self._ugoira_metadata:
+            self._ugoira_metadata = await self._client.ugoira_metadata(id=self.id)
+        return self._ugoira_metadata
+
+    async def download_as_gif(self, file: Any | None = None, needs_authentication: bool = True) -> Any:
+        metadata = await self.get_metadata()
+        zip_data: BytesIO = await self._client.download(
+            metadata.zip_urls.medium, needs_authentication=needs_authentication
+        )
+        zip_file = ZipFile(zip_data)
+
+        frames: list[Image.Image] = []
+        for frame_info in metadata.frames:
+            with zip_file.open(frame_info.file) as frame_file:
+                frame = Image.open(frame_file)
+                frame.load()
+                frames.append(frame)
+
+        if file and not iscoroutinefunction(file.write):
+            gif_io = file
+        else:
+            gif_io = BytesIO()
+
+        frames[0].save(
+            gif_io,
+            format="GIF",
+            append_images=frames[1:],
+            save_all=True,
+            duration=[frame_info.delay for frame_info in metadata.frames],
+            loop=0,
+        )
+
+        gif_io.seek(0)
+
+        if file and iscoroutinefunction(file.write):
+            await file.write(gif_io.read())
+            return file
+        else:
+            return gif_io
 
 
 class UgoiraFrame(PixivObject):

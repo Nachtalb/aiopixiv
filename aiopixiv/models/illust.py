@@ -178,6 +178,8 @@ class Illust(PixivObject):
             needs_authentication=needs_authentication,
         )
 
+    download = download_first
+
     async def download_all(
         self,
         files: Sequence[Any] | None = None,

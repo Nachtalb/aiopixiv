@@ -25,6 +25,8 @@ python = "^3.10"
 httpx = "^0.24.1"
 aiopath = "^0.6.11"
 yarl = "^1.9.2"
+pillow = "^10.0.0"
+types-pillow = "^10.0.0.2"
 
 [tool.poetry.group.dev.dependencies]
 black = ">=23.0"
