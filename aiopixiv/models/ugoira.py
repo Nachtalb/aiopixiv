@@ -139,6 +139,22 @@ class UgoiraIllust(Illust):
             comment_access_control=comment_access_control,
         )
 
+    @classmethod
+    def de_json(cls, data: Optional[JSONDict], client: "PixivAPI") -> Optional["UgoiraIllust"]:
+        """See `PixivObject.de_json`."""
+        data = cls._parse_data(data)
+
+        if not data:
+            return None
+
+        data["image_urls"] = ImageUrls.de_json(data.pop("image_urls"), client)
+        data["user"] = User.de_json(data.pop("user"), client)
+        data["tags"] = Tag.de_list(data.pop("tags"), client)
+        data["meta_single_page"] = MetaSinglePageUrl.de_json(data.pop("meta_single_page"), client)
+        data["meta_pages"] = MetaPagesUrls.de_list(data.pop("meta_pages"), client)
+
+        return super(Illust, cls).de_json(data=data, client=client)
+
 
 class UgoiraFrame(PixivObject):
     """

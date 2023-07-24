@@ -17,6 +17,8 @@ from aiopixiv._utils.types import FilePath, JSONDict
 from aiopixiv.error import AuthenticationError, NotAuthenticated, PixivError
 from aiopixiv.models.authentication import AuthenticatedUser, Authentication
 from aiopixiv.models.illust import Illust
+from aiopixiv.models.manga import MangaIllust
+from aiopixiv.models.ugoira import UgoiraIllust
 from aiopixiv.request import HTTPXRequest, RequestData
 from aiopixiv.request._requestparameters import RequestParameter
 
@@ -628,7 +630,7 @@ class PixivAPI(PixivObject, AsyncContextManager["PixivAPI"]):
         *,
         needs_authentication: bool = True,
         api_kwargs: Optional[JSONDict] = None,
-    ) -> Illust:
+    ) -> Illust | UgoiraIllust | MangaIllust:
         params: JSONDict = {
             "illust_id": id,
         }
@@ -640,4 +642,10 @@ class PixivAPI(PixivObject, AsyncContextManager["PixivAPI"]):
             api_kwargs=api_kwargs,
         )
 
-        return Illust.de_json(result["illust"], self)  # type: ignore[return-value]
+        match result["illust"]["type"]:
+            case "ugoira":
+                return UgoiraIllust.de_json(result["illust"], self)  # type: ignore[return-value]
+            case "manga":
+                return MangaIllust.de_json(result["illust"], self)  # type: ignore[return-value]
+            case _:
+                return Illust.de_json(result["illust"], self)  # type: ignore[return-value]

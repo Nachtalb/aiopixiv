@@ -1,10 +1,14 @@
 from datetime import datetime
-from typing import List, Optional
+from typing import TYPE_CHECKING, List, Optional
 
+from aiopixiv._utils.types import JSONDict
 from aiopixiv.models.illust import Illust
 from aiopixiv.models.tag import Tag
 from aiopixiv.models.urls import ImageUrls, MetaPagesUrls, MetaSinglePageUrl
 from aiopixiv.models.user import User
+
+if TYPE_CHECKING:
+    from aiopixiv._api import PixivAPI
 
 
 class MangaIllust(Illust):
@@ -129,3 +133,19 @@ class MangaIllust(Illust):
             illust_book_style=illust_book_style,
             comment_access_control=comment_access_control,
         )
+
+    @classmethod
+    def de_json(cls, data: Optional[JSONDict], client: "PixivAPI") -> Optional["MangaIllust"]:
+        """See `PixivObject.de_json`."""
+        data = cls._parse_data(data)
+
+        if not data:
+            return None
+
+        data["image_urls"] = ImageUrls.de_json(data.pop("image_urls"), client)
+        data["user"] = User.de_json(data.pop("user"), client)
+        data["tags"] = Tag.de_list(data.pop("tags"), client)
+        data["meta_single_page"] = MetaSinglePageUrl.de_json(data.pop("meta_single_page"), client)
+        data["meta_pages"] = MetaPagesUrls.de_list(data.pop("meta_pages"), client)
+
+        return super(Illust, cls).de_json(data=data, client=client)
