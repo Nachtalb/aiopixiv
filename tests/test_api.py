@@ -40,27 +40,19 @@ class TestPixivApiWithoutRequest:
         assert isinstance(to_dict_pixiv_api, dict)
         assert to_dict_pixiv_api == {}
 
-    async def test_initialize_and_shutdown(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        async def initialize(*_: Any, **__: Any) -> None:
-            self.test_flag = ["initialize"]
-
-        async def stop(*_: Any, **__: Any) -> None:
-            self.test_flag.append("stop")
-
+    @patch("aiopixiv.request._httpxrequest.HTTPXRequest.initialize")
+    @patch("aiopixiv.request._httpxrequest.HTTPXRequest.shutdown")
+    async def test_initialize_and_shutdown(self, mocked_shutdown: Mock, mocked_initialize: Mock) -> None:
         pixiv_api = PixivAPI()
 
-        orig_stop = pixiv_api._session.shutdown
+        mocked_initialize.assert_not_called()
+        mocked_shutdown.assert_not_called()
 
-        try:
-            monkeypatch.setattr(pixiv_api._session, "initialize", initialize)
-            monkeypatch.setattr(pixiv_api._session, "shutdown", stop)
-            await pixiv_api.initialize()
-            assert self.test_flag == ["initialize"]
+        await pixiv_api.initialize()
+        mocked_initialize.assert_called_once()
 
-            await pixiv_api.shutdown()
-            assert self.test_flag == ["initialize", "stop"]
-        finally:
-            await orig_stop()
+        await pixiv_api.shutdown()
+        mocked_shutdown.assert_called_once()
 
     async def test_initialize_authenticates(self, monkeypatch: pytest.MonkeyPatch) -> None:
         async def authenticate(*_: Any, **__: Any) -> None:
