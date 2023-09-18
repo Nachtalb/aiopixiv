@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "aiopixiv"
-version = "0.1.0a0"
+version = "0.1.0a1"
 description = "Asynchronous Pixiv API for Python (with 6.x AppAPI supported)"
 authors = ["Nachtalb <na@nachtalb.io>"]
 license = "LGPL-3.0"
